@@ -24,18 +24,6 @@ for id_ in single_ids:
 print("Count =", count)
 
 
-ranges = []
-
-with open("./data/day05.txt") as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        
-        if "-" in line:
-            start, end = map(int, line.split("-"))
-            ranges.append((start, end))
-
 ranges.sort()
 
 merged = []
