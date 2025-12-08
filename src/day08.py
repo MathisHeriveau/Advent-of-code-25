@@ -1,9 +1,6 @@
 import math
 from itertools import combinations
 
-# -------------------------
-#   Lecture du fichier
-# -------------------------
 points = []
 with open("./data/day08.txt") as f:
     for line in f:
@@ -16,9 +13,6 @@ with open("./data/day08.txt") as f:
 n = len(points)
 print("Nombre de points :", n)
 
-# -------------------------
-#   Union-Find
-# -------------------------
 parent = list(range(n))
 size = [1] * n
 components = n
@@ -41,9 +35,6 @@ def union(a, b):
     components -= 1
     return True
 
-# -------------------------
-#   Calcul des distances (sans racine → plus rapide)
-# -------------------------
 distances = []
 for i in range(n):
     x1, y1, z1 = points[i]
@@ -54,12 +45,8 @@ for i in range(n):
 
 print("Nombre de paires :", len(distances))
 
-# Trie global de toutes les distances
 distances.sort(key=lambda t: t[0])
 
-# -------------------------
-#   On connecte jusqu’à avoir 1 seul circuit
-# -------------------------
 last_pair = None
 
 for _, i, j in distances:
@@ -68,9 +55,6 @@ for _, i, j in distances:
         if components == 1:
             break
 
-# -------------------------
-#   Résultat Partie 2
-# -------------------------
 a, b = last_pair
 x1, _, _ = points[a]
 x2, _, _ = points[b]
