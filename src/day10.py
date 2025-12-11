@@ -1,62 +1,49 @@
 from itertools import product
+from fractions import Fraction
 
-machines = []
-with open("./data/day10.txt") as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        machines.append(line)
-        
-# 1. Représenter chaque bouton comme un vecteur binaire
-# 2. Représenter le pattern final comme un vecteur binaire
-# 3. Résoudre A x = b en mod 2
-# 4. Générer toutes les solutions via variables libres
-# 5. Choisir la solution avec le moins de 1 → minimal presses
+# ========================================
+# ============  PARSING PART 1  ==========
+# ========================================
 
-def split_machine_to_schema_and_boutons(line):
-    parts = line.split(" ")
-    schema_str = parts[0][1:-1] 
+def parse_machine_part1(line):
+    parts = line.split()
+
+    # 1. Schéma entre [ ]
+    schema_str = parts[0][1:-1]
     schema = [1 if c == '#' else 0 for c in schema_str]
+    n = len(schema)
 
+    # 2. Boutons
     boutons = []
-    for part in parts[1:]:
-        if part.startswith("(") and part.endswith(")"):
-            bouton = tuple(map(int, part[1:-1].split(",")))
-            bouton_vector = [0] * len(schema)
-            for pos in bouton:
-                bouton_vector[pos] = 1
-            boutons.append(bouton_vector)
+    for p in parts[1:]:
+        if p.startswith("(") and p.endswith(")"):
+            inside = p[1:-1]
+            idxs = list(map(int, inside.split(",")))
+            vec = [0] * n
+            for i in idxs:
+                vec[i] = 1
+            boutons.append(vec)
 
     return schema, boutons
 
 
+# ========================================
+# ========  PART 1 SOLVEUR MOD 2 =========
+# ========================================
 
-def solve_machine(schema, boutons):
-    """
-    schema : liste de 0/1, taille m (nb de lumières)
-    boutons : liste de vecteurs 0/1, chaque vecteur taille m (nb de lumières)
-    Retourne : min nombre de pressions pour cette machine
-    """
-    m = len(schema)         # nb lignes (lumières)
-    n = len(boutons)        # nb colonnes (boutons)
+def solve_machine_part1(schema, boutons):
+    m = len(schema)
+    n = len(boutons)
 
-    if n == 0:
-        # aucun bouton → soit déjà bon, soit impossible (AoC devrait pas mettre ça)
-        return 0 if all(x == 0 for x in schema) else float('inf')
-
-    # Construire la matrice A (m x n) : A[row][col]
-    A = [[boutons[col][row] for col in range(n)] for row in range(m)]
+    A = [[boutons[j][i] for j in range(n)] for i in range(m)]
     b = schema[:]
 
-    # --- Gauss-Jordan mod 2 ---
     A = [row[:] for row in A]
     b = b[:]
-    pivot_col_for_row = [-1] * m
+    pivot_col = [-1] * m
 
     row = 0
     for col in range(n):
-        # chercher pivot sur cette colonne
         sel = None
         for i in range(row, m):
             if A[i][col] == 1:
@@ -65,15 +52,12 @@ def solve_machine(schema, boutons):
         if sel is None:
             continue
 
-        # swap lignes
         A[row], A[sel] = A[sel], A[row]
         b[row], b[sel] = b[sel], b[row]
-        pivot_col_for_row[row] = col
+        pivot_col[row] = col
 
-        # éliminer sur toutes les autres lignes
         for i in range(m):
             if i != row and A[i][col] == 1:
-                # ligne_i ^= ligne_row
                 for j in range(col, n):
                     A[i][j] ^= A[row][j]
                 b[i] ^= b[row]
@@ -82,62 +66,204 @@ def solve_machine(schema, boutons):
         if row == m:
             break
 
-    # Vérifier incohérence : 0...0 | 1
+    # Check inconsistent
     for i in range(m):
-        if all(x == 0 for x in A[i]) and b[i] == 1:
-            return float('inf')  # pas de solution
+        if all(A[i][j] == 0 for j in range(n)) and b[i] == 1:
+            return float("inf")
 
-    pivot_cols = [c for c in pivot_col_for_row if c != -1]
-    free_cols = [c for c in range(n) if c not in pivot_cols]
+    pivots = {pc for pc in pivot_col if pc != -1}
+    free = [j for j in range(n) if j not in pivots]
 
-    # Fonction pour reconstruire x à partir d'une assignation de free vars
-    def build_solution(free_assign):
-        x = [0] * n
-        # poser les variables libres
-        for idx, col in enumerate(free_cols):
-            x[col] = free_assign[idx]
+    def build_x(assign):
+        x = [0]*n
+        for idx, col in enumerate(free):
+            x[col] = assign[idx]
 
-        # back-substitution sur les lignes pivot
-        for i in range(m - 1, -1, -1):
-            pc = pivot_col_for_row[i]
+        for i in reversed(range(m)):
+            pc = pivot_col[i]
             if pc == -1:
                 continue
             s = 0
-            for j in range(pc + 1, n):
+            for j in range(pc+1, n):
                 if A[i][j] == 1 and x[j] == 1:
                     s ^= 1
             x[pc] = b[i] ^ s
         return x
 
-    # Si aucune variable libre → solution unique
-    if not free_cols:
-        x = build_solution([])
-        return sum(x)
+    if not free:
+        return sum(build_x([]))
 
-    # Sinon, tester toutes les combinaisons des variables libres
-    best = float('inf')
-    for assign in product([0, 1], repeat=len(free_cols)):
-        x = build_solution(assign)
-        presses = sum(x)
-        if presses < best:
-            best = presses
+    best = float("inf")
+    for assign in product([0,1], repeat=len(free)):
+        x = build_x(assign)
+        best = min(best, sum(x))
 
     return best
 
 
+# ========================================
+# ============  PARSING PART 2  ==========
+# ========================================
 
-print("*" * 40)
-total = 0
-for machine in machines:
-    schema, boutons = split_machine_to_schema_and_boutons(machine)
-    
-    initial_state = '.' * (len(schema) -2)
-    print(f"Schéma initiale : \t[{initial_state}]")
-    print(f"Schema finale : \t{schema}")
-    sous_total = solve_machine(schema, boutons)
-    print("Nombre minimal de pressions pour cette machine :", sous_total)
-    total += sous_total
-    print("*" * 40)
-    
+def parse_machine_part2(line):
+    lb = line.index("{")
+    rb = line.index("}")
+    targets = list(map(int, line[lb+1:rb].split(",")))
 
-print("Réponse partie 1 :", total)
+    before = line[:lb]
+    parts = before.split()
+
+    n = len(targets)
+    boutons = []
+
+    for p in parts:
+        if p.startswith("(") and p.endswith(")"):
+            inside = p[1:-1]
+            idxs = list(map(int, inside.split(",")))
+            vec = [0]*n
+            for i in idxs:
+                vec[i] = 1
+            boutons.append(vec)
+
+    return targets, boutons
+
+
+# ========================================
+# =========  PART 2 ILP SOLVEUR  =========
+# ========================================
+
+def solve_machine_part2(targets, boutons):
+    m = len(targets)
+    n = len(boutons)
+
+    A = [[Fraction(boutons[j][i]) for j in range(n)] for i in range(m)]
+    b = [Fraction(t) for t in targets]
+
+    pivot_col = [-1]*m
+    row = 0
+
+    # --- Gauss rationnel ---
+    for col in range(n):
+        sel = None
+        for i in range(row, m):
+            if A[i][col] != 0:
+                sel = i
+                break
+        if sel is None:
+            continue
+
+        A[row], A[sel] = A[sel], A[row]
+        b[row], b[sel] = b[sel], b[row]
+        pivot = A[row][col]
+
+        inv = Fraction(1,1) / pivot
+        for j in range(col, n):
+            A[row][j] *= inv
+        b[row] *= inv
+
+        pivot_col[row] = col
+
+        for i in range(m):
+            if i != row and A[i][col] != 0:
+                f = A[i][col]
+                for j in range(col, n):
+                    A[i][j] -= f*A[row][j]
+                b[i] -= f*b[row]
+
+        row += 1
+        if row == m:
+            break
+
+    # Impossible ?
+    for i in range(m):
+        if all(A[i][j] == 0 for j in range(n)) and b[i] != 0:
+            return float("inf")
+
+    pivots = {pc for pc in pivot_col if pc != -1}
+    free = [j for j in range(n) if j not in pivots]
+
+    def build_x(params):
+        x = [Fraction(0)]*n
+        for col,val in params.items():
+            x[col] = Fraction(val)
+
+        for i in reversed(range(m)):
+            pc = pivot_col[i]
+            if pc == -1:
+                continue
+            s = 0
+            for j in range(pc+1, n):
+                s += A[i][j]*x[j]
+            x[pc] = b[i] - s
+
+        return x
+
+    if not free:
+        x = build_x({})
+        if any(xx < 0 or xx.denominator != 1 for xx in x):
+            return float("inf")
+        return sum(int(xx) for xx in x)
+
+    bound = max(targets)
+    best = float("inf")
+
+    if len(free) == 1:
+        f = free[0]
+        for t in range(bound+1):
+            x = build_x({f:t})
+            ok = True
+            tot = 0
+            for xx in x:
+                if xx < 0 or xx.denominator != 1:
+                    ok = False
+                    break
+                tot += int(xx)
+            if ok and tot < best:
+                best = tot
+        return best
+
+    if len(free) == 2:
+        f1,f2 = free
+        for t1 in range(bound+1):
+            for t2 in range(bound+1):
+                x = build_x({f1:t1, f2:t2})
+                ok = True
+                tot = 0
+                for xx in x:
+                    if xx < 0 or xx.denominator != 1:
+                        ok = False
+                        break
+                    tot += int(xx)
+                if ok and tot < best:
+                    best = tot
+        return best
+
+    return best
+
+
+# ========================================
+# ===============  MAIN  =================
+# ========================================
+
+machines = []
+with open("./data/day10.txt") as f:
+    for line in f:
+        line=line.strip()
+        if line:
+            machines.append(line)
+
+# PART 1
+total1 = 0
+for line in machines:
+    schema, boutons = parse_machine_part1(line)
+    total1 += solve_machine_part1(schema, boutons)
+
+print("Réponse partie 1 :", total1)
+
+# PART 2
+total2 = 0
+for line in machines:
+    targets, boutons = parse_machine_part2(line)
+    total2 += solve_machine_part2(targets, boutons)
+
+print("Réponse partie 2 :", total2)
